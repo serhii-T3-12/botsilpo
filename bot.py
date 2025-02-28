@@ -1,5 +1,6 @@
 import sqlite3
 import logging
+import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import Message
 from aiogram.filters import Command
@@ -14,8 +15,15 @@ dp = Dispatcher()
 # Логування
 logging.basicConfig(level=logging.INFO)
 
+# Шлях до бази даних
+DB_PATH = "products.db"
+
+# Якщо файлу немає – створюємо новий
+if not os.path.exists(DB_PATH):
+    open(DB_PATH, 'w').close()
+
 # Підключення до SQLite
-conn = sqlite3.connect("products.db")
+conn = sqlite3.connect(DB_PATH)
 cursor = conn.cursor()
 
 # Створення таблиці
