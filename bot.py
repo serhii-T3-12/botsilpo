@@ -5,12 +5,13 @@ from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.types import Message
 
-# Токен бота
 TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
 
-# Ініціалізація бота і диспетчера
 bot = Bot(token=TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher()
+
+# Прапорець для відстеження пошуку
+user_searching = {}
 
 # Обробник команди /start
 @dp.message(Command("start"))
@@ -26,16 +27,32 @@ async def list_command(message: Message):
 # Обробник команди /search
 @dp.message(Command("search"))
 async def search_command(message: Message):
+    user_searching[message.from_user.id] = True
     await message.answer("Введи назву товару для пошуку.")
 
-# Головна функція запуску бота
+# Обробник текстових повідомлень (якщо користувач у режимі пошуку)
+@dp.message()
+async def handle_text(message: Message):
+    user_id = message.from_user.id
+    if user_searching.get(user_id):
+        query = message.text.lower()
+        
+        # Імітація бази даних
+        fake_database = ["айзберг", "молоко", "хліб", "яблуко"]
+        
+        if query in fake_database:
+            response = f"🔍 Знайдено товар: {query.capitalize()}"
+        else:
+            response = "❌ Товар не знайдено."
+
+        await message.answer(response)
+        user_searching[user_id] = False  # Вимикаємо режим пошуку
+
 async def main():
     logging.basicConfig(level=logging.INFO)
     print("Бот запущено...")
     await dp.start_polling(bot)
 
-# Запуск бота
 if __name__ == "__main__":
     asyncio.run(main())
-
 
