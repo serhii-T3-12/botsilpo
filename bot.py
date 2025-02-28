@@ -1,94 +1,119 @@
-import asyncio
 import sqlite3
+import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import Message
 from aiogram.filters import Command
 from aiogram.utils.markdown import hbold
+import asyncio
 
+# Налаштування бота
 TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
-
 bot = Bot(token=TOKEN, parse_mode="HTML")
 dp = Dispatcher()
 
-# Підключення до бази даних
+# Логування помилок
+logging.basicConfig(level=logging.INFO)
+
+# Підключення до бази даних SQLite
 conn = sqlite3.connect("products.db")
 cursor = conn.cursor()
 
-# Створення таблиці, якщо її немає
+# Створення таблиці для збереження товарів
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS products (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT UNIQUE,
-    article TEXT
-)
+    CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        article TEXT NOT NULL
+    )
 """)
 conn.commit()
 
 
-# 📌 Стартова команда
+# 📌 Команда /start
 @dp.message(Command("start"))
 async def start_command(message: Message):
-    await message.answer("Привіт! Я твій бот для управління товарами! 🛒\n\n"
-                         "Команди:\n"
+    await message.answer("👋 Привіт! Я твій бот. Ось доступні команди:\n"
+                         "/add - Додати товар\n"
                          "/list - Показати всі товари\n"
-                         "/search <назва> - Пошук товару\n"
-                         "/add <назва> - <артикул> - Додати товар")
+                         "/search - Пошук за назвою")
 
 
-# 📌 Додавання нового товару
+# 📌 Команда /add (додавання одного або кількох товарів)
 @dp.message(Command("add"))
-async def add_product(message: Message):
+async def add_multiple_products(message: Message):
     try:
-        text = message.text.split(" ", 1)[1]  # Беремо текст після команди
-        name, article = text.split(" - ")  # Розділяємо назву і артикул
+        text = message.text.split(" ", 1)[1]  # Отримуємо текст після команди
+        items = text.split(",")  # Розбиваємо товари через кому
 
-        cursor.execute("INSERT INTO products (name, article) VALUES (?, ?)", (name.strip(), article.strip()))
+        added_products = []
+        errors = []
+
+        for item in items:
+            try:
+                name, article = item.strip().split(" - ")  # Розділяємо назву і артикул
+                cursor.execute("INSERT INTO products (name, article) VALUES (?, ?)", (name.strip(), article.strip()))
+                added_products.append(f"✅ {hbold(name.strip())} (🆔 {hbold(article.strip())})")
+            except sqlite3.IntegrityError:
+                errors.append(f"⚠️ {hbold(name.strip())} вже є в базі")
+            except ValueError:
+                errors.append(f"⚠️ Неправильний формат: {hbold(item.strip())}")
+
         conn.commit()
 
-        await message.answer(f"✅ Товар {hbold(name.strip())} додано!\n🆔 Артикул: {hbold(article.strip())}")
-    except (IndexError, ValueError):
-        await message.answer("⚠️ Формат команди: /add Назва - Артикул")
-    except sqlite3.IntegrityError:
-        await message.answer("⚠️ Такий товар вже існує!")
+        response = "\n".join(added_products) if added_products else "⚠️ Жоден товар не додано."
+        if errors:
+            response += "\n\n❌ Помилки:\n" + "\n".join(errors)
 
+        await message.answer(response)
 
-# 📌 Пошук товару за назвою
-@dp.message(Command("search"))
-async def search_product(message: Message):
-    try:
-        query = message.text.split(" ", 1)[1].strip()
-        cursor.execute("SELECT name, article FROM products WHERE name LIKE ?", (f"%{query}%",))
-        result = cursor.fetchall()
-
-        if result:
-            response = "🔎 Знайдені товари:\n\n"
-            for name, article in result:
-                response += f"✅ {hbold(name)}\n🆔 Артикул: {hbold(article)}\n\n"
-            await message.answer(response)
-        else:
-            await message.answer("⚠️ Нічого не знайдено.")
     except IndexError:
-        await message.answer("⚠️ Формат команди: /search Назва")
+        await message.answer("⚠️ Формат команди: /add Назва1 - Артикул1, Назва2 - Артикул2")
 
 
-# 📌 Виведення всіх товарів
+# 📌 Команда /list (показ всіх товарів)
 @dp.message(Command("list"))
 async def list_products(message: Message):
     cursor.execute("SELECT name, article FROM products")
     products = cursor.fetchall()
 
-    if products:
-        response = "📜 Усі товари:\n\n"
-        for name, article in products:
-            response += f"✅ {hbold(name)}\n🆔 Артикул: {hbold(article)}\n\n"
+    if not products:
+        await message.answer("⚠️ Список товарів порожній.")
+        return
+
+    response = "📜 <b>Список товарів:</b>\n"
+    for name, article in products:
+        response += f"🔹 {hbold(name)} (🆔 {hbold(article)})\n"
+
+    await message.answer(response)
+
+
+# 📌 Команда /search (пошук товару)
+@dp.message(Command("search"))
+async def search_product(message: Message):
+    try:
+        query = message.text.split(" ", 1)[1].strip()
+        cursor.execute("SELECT name, article FROM products WHERE name LIKE ?", ('%' + query + '%',))
+        results = cursor.fetchall()
+
+        if not results:
+            await message.answer(f"⚠️ Товар '{query}' не знайдено.")
+            return
+
+        response = "🔍 <b>Результати пошуку:</b>\n"
+        for name, article in results:
+            response += f"✅ {hbold(name)} (🆔 {hbold(article)})\n"
+
         await message.answer(response)
-    else:
-        await message.answer("⚠️ Товарів поки що немає!")
+
+    except IndexError:
+        await message.answer("⚠️ Введіть назву товару для пошуку: /search Назва")
 
 
 # 📌 Запуск бота
 async def main():
+    print("✅ Бот запущено!")
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
