@@ -1,22 +1,22 @@
-import sqlite3
 import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import Message
 from aiogram.utils import executor
 
-# 🔹 Токен бота (заміни на свій)
-TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+# 🔹 Токен бота (замініть на свій)
+TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
 
-# 🔹 Підключення до бази даних
-conn = sqlite3.connect("products.db")
-cursor = conn.cursor()
-
-# 🔹 Створення таблиці (якщо не існує)
-cursor.execute('''CREATE TABLE IF NOT EXISTS products (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT UNIQUE,
-                    article TEXT UNIQUE)''')
-conn.commit()
+# 🔹 Список товарів у вигляді словника
+PRODUCTS = {
+    "салат айзберг": "540258",
+    "айзберг": "540258",
+    "хліб": "12345",
+    "молоко": "67890",
+    "яблуко": "11122",
+    "банан": "33344",
+    "апельсин": "55566",
+    "виноград": "77788",
+}
 
 # 🔹 Ініціалізація бота
 bot = Bot(token=TOKEN)
@@ -24,18 +24,24 @@ dp = Dispatcher(bot)
 
 @dp.message_handler(commands=["start"])
 async def start_command(message: Message):
-    await message.reply("Привіт! Введи назву товару, і я знайду його артикул.")
+    await message.reply("Привіт! Введи назву товару, і я знайду його артикул. Або введи /list, щоб побачити всі доступні товари.")
+
+@dp.message_handler(commands=["list"])
+async def list_products(message: Message):
+    """Відправляє список усіх товарів"""
+    product_list = "\n".join([f"🔹 {name.capitalize()} – {article}" for name, article in PRODUCTS.items()])
+    await message.reply(f"📋 **Список доступних товарів:**\n\n{product_list}")
 
 @dp.message_handler()
 async def find_article(message: Message):
-    product_name = message.text.strip()
-    cursor.execute("SELECT article FROM products WHERE name = ?", (product_name,))
-    result = cursor.fetchone()
+    """Шукає артикул товару за його назвою"""
+    product_name = message.text.strip().lower()
     
-    if result:
-        await message.reply(f"Артикул товару '{product_name}': {result[0]}")
+    if product_name in PRODUCTS:
+        article = PRODUCTS[product_name]
+        await message.reply(f"✅ Артикул товару '{product_name.capitalize()}': {article}")
     else:
-        await message.reply("Товар не знайдено в базі даних.")
+        await message.reply("❌ Товар не знайдено в базі.")
 
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
