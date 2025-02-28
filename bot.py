@@ -1,42 +1,41 @@
 import asyncio
+import logging
 from aiogram import Bot, Dispatcher, types
+from aiogram.enums import ParseMode
+from aiogram.filters import Command
 from aiogram.types import Message
-from aiogram.utils import executor
 
-TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"  # Твій токен бота
-bot = Bot(token=TOKEN)
-dp = Dispatcher(bot)
+# Токен бота
+TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
 
-# База товарів (назва → артикул)
-PRODUCTS = {
-    "салат айзберг": "540258",
-    "помідори чері": "123456",
-    "огірок свіжий": "789012",
-    "банани": "345678"
-}
+# Ініціалізація бота і диспетчера
+bot = Bot(token=TOKEN, parse_mode=ParseMode.HTML)
+dp = Dispatcher()
 
-# 📌 Обробник команди /start
-@dp.message_handler(commands=['start'])
-async def send_welcome(message: Message):
-    await message.reply("Привіт! Введи назву товару, і я знайду його артикул 🔍")
+# Обробник команди /start
+@dp.message(Command("start"))
+async def start_command(message: Message):
+    await message.answer("Привіт! Я твій бот.")
 
-# 📌 Обробник команди /list (список товарів)
-@dp.message_handler(commands=['list'])
-async def send_product_list(message: Message):
-    product_list = "\n".join([f"🔹 {name}" for name in PRODUCTS.keys()])
-    await message.reply(f"Ось список доступних товарів:\n{product_list}")
+# Обробник команди /list
+@dp.message(Command("list"))
+async def list_command(message: Message):
+    commands = "/start - Почати\n/list - Показати команди\n/search - Пошук за назвою"
+    await message.answer(f"Доступні команди:\n{commands}")
 
-# 📌 Обробник пошуку артикула
-@dp.message_handler()
-async def find_product(message: Message):
-    query = message.text.lower().strip()
-    for name, article in PRODUCTS.items():
-        if query in name:  # Пошук за частковим збігом
-            await message.reply(f"✅ {name.capitalize()} – Артикул: {article}")
-            return
-    await message.reply("❌ Товар не знайдено, спробуй іншу назву.")
+# Обробник команди /search
+@dp.message(Command("search"))
+async def search_command(message: Message):
+    await message.answer("Введи назву товару для пошуку.")
+
+# Головна функція запуску бота
+async def main():
+    logging.basicConfig(level=logging.INFO)
+    print("Бот запущено...")
+    await dp.start_polling(bot)
 
 # Запуск бота
 if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=True)
+    asyncio.run(main())
+
 
