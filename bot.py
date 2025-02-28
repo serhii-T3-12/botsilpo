@@ -9,6 +9,7 @@ import asyncio
 
 # Налаштування бота
 TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
+ADMIN_ID = 1299582357  # Твій Telegram ID
 bot = Bot(token=TOKEN, parse_mode="HTML")
 dp = Dispatcher()
 
@@ -26,15 +27,25 @@ if not os.path.exists(DB_PATH):
 conn = sqlite3.connect(DB_PATH)
 cursor = conn.cursor()
 
-# Створення таблиці
+# Створення таблиці, якщо вона не існує
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE NOT NULL,
-        article TEXT NOT NULL
+        article TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'Загальна'
     )
 """)
 conn.commit()
+
+
+# 🔔 Сповіщення адміна про новий товар
+async def notify_admin(product_name, article, category):
+    message = (f"🔔 <b>Додано новий товар:</b>\n"
+               f"📌 Назва: {hbold(product_name)}\n"
+               f"🆔 Артикул: {hbold(article)}\n"
+               f"📂 Категорія: {hbold(category)}")
+    await bot.send_message(ADMIN_ID, message)
 
 
 # 📌 Команда /start
@@ -45,10 +56,11 @@ async def start_command(message: Message):
                          "/list - Список товарів\n"
                          "/search - Пошук товару\n"
                          "/delete - Видалити товар\n"
-                         "/edit - Змінити товар")
+                         "/edit - Змінити товар\n"
+                         "/categories - Переглянути категорії")
 
 
-# 📌 Команда /add
+# 📌 Команда /add (додавання товару)
 @dp.message(Command("add"))
 async def add_product(message: Message):
     try:
@@ -60,9 +72,22 @@ async def add_product(message: Message):
 
         for item in items:
             try:
-                name, article = item.strip().split(" - ")
-                cursor.execute("INSERT INTO products (name, article) VALUES (?, ?)", (name.strip(), article.strip()))
-                added.append(f"✅ {hbold(name.strip())} (🆔 {hbold(article.strip())})")
+                parts = item.strip().split(" - ")
+                if len(parts) == 3:
+                    name, article, category = parts
+                elif len(parts) == 2:
+                    name, article = parts
+                    category = "Загальна"
+                else:
+                    raise ValueError
+
+                cursor.execute("INSERT INTO products (name, article, category) VALUES (?, ?, ?)", 
+                               (name.strip(), article.strip(), category.strip()))
+                added.append(f"✅ {hbold(name.strip())} (🆔 {hbold(article.strip())}, 📂 {hbold(category.strip())})")
+
+                # Сповіщення адміна
+                await notify_admin(name.strip(), article.strip(), category.strip())
+
             except sqlite3.IntegrityError:
                 errors.append(f"⚠️ {hbold(name.strip())} вже є")
             except ValueError:
@@ -77,13 +102,13 @@ async def add_product(message: Message):
         await message.answer(response)
 
     except IndexError:
-        await message.answer("⚠️ Формат: /add Назва - Артикул, Назва2 - Артикул2")
+        await message.answer("⚠️ Формат: /add Назва - Артикул - Категорія")
 
 
-# 📌 Команда /list
+# 📌 Команда /list (список товарів)
 @dp.message(Command("list"))
 async def list_products(message: Message):
-    cursor.execute("SELECT name, article FROM products")
+    cursor.execute("SELECT name, article, category FROM products")
     products = cursor.fetchall()
 
     if not products:
@@ -91,18 +116,18 @@ async def list_products(message: Message):
         return
 
     response = "📜 <b>Товари:</b>\n"
-    for name, article in products:
-        response += f"🔹 {hbold(name)} (🆔 {hbold(article)})\n"
+    for name, article, category in products:
+        response += f"🔹 {hbold(name)} (🆔 {hbold(article)}, 📂 {hbold(category)})\n"
 
     await message.answer(response)
 
 
-# 📌 Команда /search
+# 📌 Команда /search (пошук товару)
 @dp.message(Command("search"))
 async def search_product(message: Message):
     try:
         query = message.text.split(" ", 1)[1].strip()
-        cursor.execute("SELECT name, article FROM products WHERE name LIKE ?", ('%' + query + '%',))
+        cursor.execute("SELECT name, article, category FROM products WHERE name LIKE ?", ('%' + query + '%',))
         results = cursor.fetchall()
 
         if not results:
@@ -110,8 +135,8 @@ async def search_product(message: Message):
             return
 
         response = "🔍 <b>Знайдено:</b>\n"
-        for name, article in results:
-            response += f"✅ {hbold(name)} (🆔 {hbold(article)})\n"
+        for name, article, category in results:
+            response += f"✅ {hbold(name)} (🆔 {hbold(article)}, 📂 {hbold(category)})\n"
 
         await message.answer(response)
 
@@ -165,6 +190,20 @@ async def edit_product(message: Message):
         await message.answer("⚠️ Введіть назву та новий артикул: /edit Назва - Новий артикул")
 
 
+# 📌 Команда /categories (перегляд категорій)
+@dp.message(Command("categories"))
+async def list_categories(message: Message):
+    cursor.execute("SELECT DISTINCT category FROM products")
+    categories = cursor.fetchall()
+
+    if not categories:
+        await message.answer("⚠️ Жодної категорії немає.")
+        return
+
+    response = "📂 <b>Категорії товарів:</b>\n" + "\n".join([f"🔸 {hbold(cat[0])}" for cat in categories])
+    await message.answer(response)
+
+
 # 📌 Запуск бота
 async def main():
     print("✅ Бот запущено!")
@@ -173,4 +212,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
