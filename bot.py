@@ -45,7 +45,7 @@ async def notify_admin(action, product_name, article, category=""):
     message = f"🔔 <b>{action}</b>\n📌 Назва: {hbold(product_name)}\n🆔 Артикул: {hbold(article)}"
     if category:
         message += f"\n📂 Категорія: {hbold(category)}"
-    await bot.send_message(ADMIN_ID, message)
+    await bot.send_message(1299582357, message)
 
 
 # 📌 /start
