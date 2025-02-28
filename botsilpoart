@@ -3,45 +3,40 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import Message
 from aiogram.utils import executor
 
-# 🔹 Токен бота (замініть на свій)
-TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
-
-# 🔹 Список товарів у вигляді словника
-PRODUCTS = {
-    "салат айзберг": "540258",
-    "айзберг": "540258",
-    "хліб": "12345",
-    "молоко": "67890",
-    "яблуко": "11122",
-    "банан": "33344",
-    "апельсин": "55566",
-    "виноград": "77788",
-}
-
-# 🔹 Ініціалізація бота
+TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"  # Твій токен бота
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot)
 
-@dp.message_handler(commands=["start"])
-async def start_command(message: Message):
-    await message.reply("Привіт! Введи назву товару, і я знайду його артикул. Або введи /list, щоб побачити всі доступні товари.")
+# База товарів (назва → артикул)
+PRODUCTS = {
+    "салат айзберг": "540258",
+    "помідори чері": "123456",
+    "огірок свіжий": "789012",
+    "банани": "345678"
+}
 
-@dp.message_handler(commands=["list"])
-async def list_products(message: Message):
-    """Відправляє список усіх товарів"""
-    product_list = "\n".join([f"🔹 {name.capitalize()} – {article}" for name, article in PRODUCTS.items()])
-    await message.reply(f"📋 **Список доступних товарів:**\n\n{product_list}")
+# 📌 Обробник команди /start
+@dp.message_handler(commands=['start'])
+async def send_welcome(message: Message):
+    await message.reply("Привіт! Введи назву товару, і я знайду його артикул 🔍")
 
+# 📌 Обробник команди /list (список товарів)
+@dp.message_handler(commands=['list'])
+async def send_product_list(message: Message):
+    product_list = "\n".join([f"🔹 {name}" for name in PRODUCTS.keys()])
+    await message.reply(f"Ось список доступних товарів:\n{product_list}")
+
+# 📌 Обробник пошуку артикула
 @dp.message_handler()
-async def find_article(message: Message):
-    """Шукає артикул товару за його назвою"""
-    product_name = message.text.strip().lower()
-    
-    if product_name in PRODUCTS:
-        article = PRODUCTS[product_name]
-        await message.reply(f"✅ Артикул товару '{product_name.capitalize()}': {article}")
-    else:
-        await message.reply("❌ Товар не знайдено в базі.")
+async def find_product(message: Message):
+    query = message.text.lower().strip()
+    for name, article in PRODUCTS.items():
+        if query in name:  # Пошук за частковим збігом
+            await message.reply(f"✅ {name.capitalize()} – Артикул: {article}")
+            return
+    await message.reply("❌ Товар не знайдено, спробуй іншу назву.")
 
+# Запуск бота
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
+
