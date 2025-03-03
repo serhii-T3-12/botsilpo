@@ -9,7 +9,7 @@ from aiogram.utils.markdown import hbold
 import asyncio
 
 # Налаштування бота
-TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
+TOKEN = "ТВІЙ_ТОКЕН"
 ADMIN_ID = 1299582357  # Твій Telegram ID
 bot = Bot(token=TOKEN, parse_mode="HTML")
 dp = Dispatcher()
@@ -45,7 +45,7 @@ async def notify_admin(action, product_name, article, category=""):
     message = f"🔔 <b>{action}</b>\n📌 Назва: {hbold(product_name)}\n🆔 Артикул: {hbold(article)}"
     if category:
         message += f"\n📂 Категорія: {hbold(category)}"
-    await bot.send_message(1299582357, message)
+    await bot.send_message(ADMIN_ID, message)
 
 
 # 📌 /start
