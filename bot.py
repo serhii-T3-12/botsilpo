@@ -2,12 +2,11 @@ import sqlite3
 import logging
 import os
 import csv
-import asyncio
-import aiosqlite
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import Message
 from aiogram.filters import Command
 from aiogram.utils.markdown import hbold
+import asyncio
 
 # 🔹 Налаштування бота
 TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
