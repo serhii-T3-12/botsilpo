@@ -230,7 +230,7 @@ async def add_product(message: Message):
 
     except ValueError:
         await message.answer("⚠️ Формат: /add Назва - Артикул - Категорія")
-)
+
 
 
 # 📌 /list
