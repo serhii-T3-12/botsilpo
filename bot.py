@@ -7,40 +7,56 @@ from aiogram.types import Message
 from aiogram.filters import Command
 from aiogram.utils.markdown import hbold
 import asyncio
+import aiosqlite
 
-# Налаштування бота
-TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
+
+# 🔹 Налаштування бота
+TOKEN = "-"
 ADMIN_ID = 1299582357  # Твій Telegram ID
+AUTHORIZED_USERS = {ADMIN_ID}  # Список авторизованих користувачів
+
 bot = Bot(token=TOKEN, parse_mode="HTML")
 dp = Dispatcher()
 
-# Логування
+# 🔹 Логування
 logging.basicConfig(level=logging.INFO)
 
-# Шлях до бази даних
+# 🔹 Шлях до бази даних
 DB_PATH = "products.db"
 
-# Якщо файлу немає – створюємо новий
-if not os.path.exists(DB_PATH):
-    open(DB_PATH, 'w').close()
-
-# Підключення до SQLite
-conn = sqlite3.connect(DB_PATH)
-cursor = conn.cursor()
-
-# Створення таблиці, якщо вона не існує
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL,
-        article TEXT NOT NULL,
-        category TEXT NOT NULL DEFAULT 'Загальна'
-    )
-""")
-conn.commit()
+# 🔹 Функція підключення до БД та виконання запитів
+async def execute_query(query, params=(), fetchone=False, fetchall=False):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(query, params) as cursor:
+            result = None
+            if fetchone:
+                result = await cursor.fetchone()
+            elif fetchall:
+                result = await cursor.fetchall()
+            await db.commit()
+            return result
 
 
-# 🔔 Сповіщення адміна
+# 🔹 Створення таблиці, якщо її немає
+async def init_db():
+    await execute_query("""
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            article TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT 'Загальна'
+        )
+    """)
+
+# 🔹 Функція перевірки адміністратора
+def is_admin(user_id):
+    return user_id == ADMIN_ID
+
+# 🔹 Функція перевірки авторизації
+def is_authorized(user_id):
+    return user_id in AUTHORIZED_USERS
+
+# 🔹 Сповіщення адміністратора
 async def notify_admin(action, product_name, article, category=""):
     message = f"🔔 <b>{action}</b>\n📌 Назва: {hbold(product_name)}\n🆔 Артикул: {hbold(article)}"
     if category:
@@ -52,41 +68,113 @@ async def notify_admin(action, product_name, article, category=""):
 @dp.message(Command("start"))
 async def start_command(message: Message):
     await message.answer("👋 Привіт! Ось команди:\n"
-                         "/add - Додати товар\n"
-                         "/list - Список товарів\n"
                          "/search - Пошук товару\n"
-                         "/delete - Видалити товар\n"
-                         "/edit - Змінити товар\n"
-                         "/categories - Переглянути категорії\n"
-                         "/export - Експорт товарів\n"
-                         "/import - Імпорт товарів")
+                         "/search_article - Пошук за артикулом\n"
+                         "/count - Кількість товарів\n"
+                         "\n🔐 <b>Авторизовані користувачі:</b>\n"
+                         "/add, /list, /delete, /edit, /categories\n"
+                         "/export, /import, /export_category, /clear_all\n"
+                         "\n/login <пароль> – авторизація\n/logout – вийти")
+
+# 📌 /login - Авторизація
+@dp.message(Command("login"))
+async def login_command(message: Message):
+    try:
+        password = message.text.split(" ", 1)[1].strip()
+        if password == "01032025":
+            AUTHORIZED_USERS.add(message.from_user.id)
+            await message.answer("✅ Ви успішно авторизовані! Вам доступні адміністративні команди.")
+        else:
+            await message.answer("❌ Невірний пароль! Спробуйте ще раз.")
+    except IndexError:
+        await message.answer("⚠️ Використання: /login <пароль>")
+
+# 📌 /count
+@dp.message(Command("count"))
+async def count_products(message: Message):
+    result = await execute_query("SELECT COUNT(*) FROM products", fetchone=True)
+    count = result[0] if result else 0
+    await message.answer(f"📦 У базі збережено {count} товарів.")
+
+# 📌 /search_article
+@dp.message(Command("search_article"))
+async def search_article(message: Message):
+    try:
+        article = message.text.split(" ", 1)[1].strip()
+        result = await execute_query("SELECT name, category FROM products WHERE article = ?", (article,), fetchone=True)
+        if result:
+            name, category = result
+            await message.answer(f"🔍 Знайдено:\n✅ {hbold(name)} (📂 {hbold(category)})")
+        else:
+            await message.answer(f"⚠️ Артикул '{article}' не знайдено.")
+    except IndexError:
+        await message.answer("⚠️ Формат: /search_article <артикул>")
+
+# 📌 /export_category
+@dp.message(Command("export_category"))
+async def export_category(message: Message):
+    if not is_authorized(message.from_user.id):
+        await message.answer("❌ У вас немає прав!")
+        return
+
+    try:
+        category = message.text.split(" ", 1)[1].strip()
+        file_path = f"{category}_products.csv"
+
+        products = await execute_query(
+            "SELECT name, article FROM products WHERE category = ?", (category,), fetchall=True
+        )
+
+        if not products:
+            await message.answer(f"⚠️ У категорії '{category}' товарів немає.")
+            return
+
+        with open(file_path, mode="w", newline="", encoding="utf-8") as file:
+            writer = csv.writer(file)
+            writer.writerow(["Назва", "Артикул"])
+            writer.writerows(products)
+
+        await message.answer_document(types.FSInputFile(file_path), caption=f"📂 Товари з категорії '{category}'")
+
+    except IndexError:
+        await message.answer("⚠️ Формат: /export_category <категорія>")
 
 
-# 📌 /export (експорт у CSV)
+
+# 📌 /export (експорт у CSV) - лише для адмінів
 @dp.message(Command("export"))
 async def export_products(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ У вас немає прав для виконання цієї команди!")
+        return
+
     file_path = "products.csv"
 
-    cursor.execute("SELECT name, article, category FROM products")
-    products = cursor.fetchall()
+    products = await execute_query(
+        "SELECT name, article, category FROM products", fetchall=True
+    )
 
     if not products:
         await message.answer("⚠️ База товарів порожня.")
         return
 
-    # Запис у CSV
     with open(file_path, mode="w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
         writer.writerow(["Назва", "Артикул", "Категорія"])
         writer.writerows(products)
 
-    # Надсилання файлу
     await message.answer_document(types.FSInputFile(file_path), caption="📂 Ваш список товарів")
 
 
-# 📌 /import (імпорт із CSV)
+
+
+# 📌 /import (імпорт із CSV) - лише для адмінів
 @dp.message(Command("import"))
 async def import_products(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ У вас немає прав для виконання цієї команди!")
+        return
+
     if not os.path.exists("products.csv"):
         await message.answer("⚠️ Файл products.csv не знайдено.")
         return
@@ -99,43 +187,58 @@ async def import_products(message: Message):
         for row in reader:
             try:
                 name, article, category = row
-                cursor.execute("INSERT INTO products (name, article, category) VALUES (?, ?, ?)", 
-                               (name.strip(), article.strip(), category.strip()))
+
+                await execute_query(
+                    "INSERT INTO products (name, article, category) VALUES (?, ?, ?)",
+                    (name.strip(), article.strip(), category.strip()),
+                    fetchone=False,
+                    fetchall=False
+                )
+
                 added += 1
             except sqlite3.IntegrityError:
                 pass
 
-        conn.commit()
-
     await message.answer(f"✅ Імпортовано {added} товарів")
+
 
 
 # 📌 /add
 @dp.message(Command("add"))
 async def add_product(message: Message):
+    if not is_authorized(message.from_user.id):
+        await message.answer("❌ У вас немає прав!")
+        return
+
     try:
-        text = message.text.split(" ", 1)[1]
-        items = text.split(",")
+        text = message.text.split(" ", 1)[1].strip()
+        name, article, category = map(str.strip, text.split(" - "))
 
-        for item in items:
-            name, article, category = map(str.strip, item.split(" - ")) if " - " in item else (item.strip(), "Невідомо", "Загальна")
+        # 🔍 Перевіряємо, чи є такий товар у базі
+        existing_product = await execute_query("SELECT id FROM products WHERE name = ? OR article = ?", 
+                                               (name, article), fetchone=True)
 
-            cursor.execute("INSERT INTO products (name, article, category) VALUES (?, ?, ?)", 
-                           (name, article, category))
-            await notify_admin("Додано новий товар", name, article, category)
+        if existing_product:
+            await message.answer(f"⚠️ Товар '{name}' або артикул '{article}' вже існує в базі!")
+            return
 
-        conn.commit()
-        await message.answer(f"✅ Додано {len(items)} товарів")
+        # ✅ Додаємо товар у базу
+        await execute_query("INSERT INTO products (name, article, category) VALUES (?, ?, ?)", 
+                            (name, article, category))
 
-    except IndexError:
+        await notify_admin("Додано новий товар", name, article, category)
+        await message.answer(f"✅ Товар '{name}' додано!")
+
+    except ValueError:
         await message.answer("⚠️ Формат: /add Назва - Артикул - Категорія")
+
 
 
 # 📌 /list
 @dp.message(Command("list"))
 async def list_products(message: Message):
-    cursor.execute("SELECT name, article, category FROM products")
-    products = cursor.fetchall()
+    # ❌ ПОМИЛКА: раніше було cursor.execute(...)
+    products = await execute_query("SELECT name, article, category FROM products", fetchall=True)
 
     if not products:
         await message.answer("⚠️ Список порожній.")
@@ -148,24 +251,21 @@ async def list_products(message: Message):
     await message.answer(response)
 
 
+
 # 📌 /search
 @dp.message(Command("search"))
 async def search_product(message: Message):
     try:
         query = message.text.split(" ", 1)[1].strip()
-        cursor.execute("SELECT name, article, category FROM products WHERE name LIKE ?", ('%' + query + '%',))
-        results = cursor.fetchall()
-
+        results = await execute_query("SELECT name, article, category FROM products WHERE name LIKE ?", 
+                                      ('%' + query + '%',), fetchall=True)
         if not results:
             await message.answer(f"⚠️ '{query}' не знайдено.")
             return
-
         response = "🔍 <b>Знайдено:</b>\n"
         for name, article, category in results:
             response += f"✅ {hbold(name)} (🆔 {hbold(article)}, 📂 {hbold(category)})\n"
-
         await message.answer(response)
-
     except IndexError:
         await message.answer("⚠️ Введіть назву: /search Назва")
 
@@ -173,15 +273,17 @@ async def search_product(message: Message):
 # 📌 /delete
 @dp.message(Command("delete"))
 async def delete_product(message: Message):
+    if not is_authorized(message.from_user.id):
+        await message.answer("❌ У вас немає прав!")
+        return
+
     try:
         name = message.text.split(" ", 1)[1].strip()
-        cursor.execute("DELETE FROM products WHERE name = ?", (name,))
-        conn.commit()
+        await execute_query("DELETE FROM products WHERE name = ?", (name,))
+        
         await message.answer(f"🗑 Товар '{hbold(name)}' видалено!")
-
     except IndexError:
         await message.answer("⚠️ Формат: /delete Назва")
-
 
 # 📌 /edit
 @dp.message(Command("edit"))
@@ -190,22 +292,19 @@ async def edit_product(message: Message):
         text = message.text.split(" ", 1)[1].strip()
         name, new_article = text.split(" - ")
 
-        cursor.execute("UPDATE products SET article = ? WHERE name = ?", (new_article.strip(), name.strip()))
-        conn.commit()
+        await execute_query("UPDATE products SET article = ? WHERE name = ?", (new_article.strip(), name.strip()))
+       
 
         await message.answer(f"✏️ Товар '{hbold(name)}' оновлено!\nНовий артикул: 🆔 {hbold(new_article.strip())}")
 
     except IndexError:
         await message.answer("⚠️ Формат: /edit Назва - Новий артикул")
 
-
 # 📌 Запуск бота
 async def main():
     print("✅ Бот запущено!")
+    await init_db()  # Ініціалізація бази перед стартом бота
     await dp.start_polling(bot)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
