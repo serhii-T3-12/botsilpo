@@ -15,7 +15,7 @@ TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
 ADMIN_ID = 1299582357  # Твій Telegram ID
 AUTHORIZED_USERS = {ADMIN_ID}  # Список авторизованих користувачів
 
-bot = Bot(token=TOKEN, parse_mode="HTML")
+bot = Bot(token=7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw, parse_mode="HTML")
 dp = Dispatcher()
 
 # 🔹 Логування
