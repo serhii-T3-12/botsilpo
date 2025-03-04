@@ -102,6 +102,22 @@ async def count_products(message: Message):
     count = result[0] if result else 0
     await message.answer(f"📦 У базі збережено {count} товарів.")
 
+# 📌 /list
+@dp.message(Command("list"))
+async def list_products(message: Message):
+    products = await execute_query("SELECT name, article, category FROM products", fetchall=True)
+
+    if not products:
+        await message.answer("📭 У базі немає товарів!")
+        return
+
+    response = "📋 <b>Список товарів:</b>\n"
+    for name, article, category in products:
+        response += f"✅ {hbold(name)} (🆔 {hbold(article)}, 📂 {hbold(category)})\n"
+
+    await message.answer(response)
+
+
 # 📌 /search_article
 @dp.message(Command("search_article"))
 async def search_article(message: Message):
