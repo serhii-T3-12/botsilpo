@@ -9,7 +9,7 @@ from aiogram.utils.markdown import hbold
 import asyncio
 
 # Налаштування бота
-TOKEN = "ТВІЙ_ТОКЕН"
+TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
 ADMIN_ID = 1299582357  # Твій Telegram ID
 bot = Bot(token=TOKEN, parse_mode="HTML")
 dp = Dispatcher()
