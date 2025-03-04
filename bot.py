@@ -218,43 +218,48 @@ async def add_product(message: Message):
 
     try:
         text = message.text.split(" ", 1)[1].strip()
-        name, article, category = map(str.strip, text.split(" - "))
+        products = [p.strip() for p in text.split("\n")]  # Розбиваємо товари по рядках
 
-        # 🔍 Перевіряємо, чи є такий товар у базі
-        existing_product = await execute_query("SELECT id FROM products WHERE name = ? OR article = ?", 
-                                               (name, article), fetchone=True)
+        added_count = 0
+        existing_count = 0
 
-        if existing_product:
-            await message.answer(f"⚠️ Товар '{name}' або артикул '{article}' вже існує в базі!")
-            return
+        for product in products:
+            try:
+                name, article, category = map(str.strip, product.split(" - "))
 
-        # ✅ Додаємо товар у базу
-        await execute_query("INSERT INTO products (name, article, category) VALUES (?, ?, ?)", 
-                            (name, article, category))
+                # 🔍 Перевіряємо, чи є такий товар у базі
+                existing_product = await execute_query(
+                    "SELECT id FROM products WHERE name = ? OR article = ?",
+                    (name, article), fetchone=True
+                )
 
-        await notify_admin("Додано новий товар", name, article, category)
-        await message.answer(f"✅ Товар '{name}' додано!")
+                if existing_product:
+                    existing_count += 1
+                    continue  # Пропускаємо товар, якщо він уже є
 
-    except ValueError:
-        await message.answer("⚠️ Формат: /add Назва - Артикул - Категорія")
+                # ✅ Додаємо товар у базу
+                await execute_query(
+                    "INSERT INTO products (name, article, category) VALUES (?, ?, ?)",
+                    (name, article, category)
+                )
 
+                added_count += 1
 
+            except ValueError:
+                await message.answer(f"⚠️ Неправильний формат: {product}. Формат: Назва - Артикул - Категорія")
+                continue  # Пропускаємо помилковий запис
 
-# 📌 /list
-@dp.message(Command("list"))
-async def list_products(message: Message):
-    # ❌ ПОМИЛКА: раніше було cursor.execute(...)
-    products = await execute_query("SELECT name, article, category FROM products", fetchall=True)
+        # 🔔 Відправляємо підсумкове повідомлення
+        result_msg = f"✅ Успішно додано: {added_count} товар(ів).\n"
+        if existing_count:
+            result_msg += f"⚠️ Пропущено (вже є в базі): {existing_count} товар(ів)."
 
-    if not products:
-        await message.answer("⚠️ Список порожній.")
-        return
+        await message.answer(result_msg)
 
-    response = "📜 <b>Товари:</b>\n"
-    for name, article, category in products:
-        response += f"🔹 {hbold(name)} (🆔 {hbold(article)}, 📂 {hbold(category)})\n"
+    except IndexError:
+        await message.answer("⚠️ Формат: /add Назва - Артикул - Категорія\n"
+                             "Щоб додати кілька товарів, введіть кожен з нового рядка.")
 
-    await message.answer(response)
 
 
 
