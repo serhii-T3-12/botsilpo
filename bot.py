@@ -33,14 +33,17 @@ DB_PATH = "products.db"
 # 🔹 Функція підключення до БД та виконання запитів
 async def execute_query(query, params=(), fetchone=False, fetchall=False):
     async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute(query, params) as cursor:
-            result = None
-            if fetchone:
-                result = await cursor.fetchone()
-            elif fetchall:
-                result = await cursor.fetchall()
-            await db.commit()
-            return result
+        cursor = await db.execute(query, params)
+        result = None
+
+        if fetchone:
+            result = await cursor.fetchone()
+        elif fetchall:
+            result = await cursor.fetchall()
+
+        await db.commit()
+        await cursor.close()  # Закриваємо курсор перед виходом
+        return result
 
 
 # 🔹 Створення таблиці, якщо її немає
@@ -330,7 +333,7 @@ async def edit_product(message: Message):
 # 📌 Запуск бота
 async def main():
     print("✅ Бот запущено!")
-    await init_db()  # Ініціалізація бази перед стартом бота
+    await init_db()  # Ініціалізація бази перед стартом бота (важливо!)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
