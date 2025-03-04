@@ -93,7 +93,7 @@ async def login_command(message: Message):
         else:
             await message.answer("❌ Невірний пароль! Спробуйте ще раз.")
     except IndexError:
-        await message.answer("⚠️ Використання: /login <пароль>")
+        await message.answer("⚠️ Використання: /login пароль")
 
 # 📌 /count
 @dp.message(Command("count"))
