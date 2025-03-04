@@ -9,7 +9,6 @@ from aiogram.utils.markdown import hbold
 import asyncio
 import aiosqlite
 
-
 from aiogram import Bot, Dispatcher
 
 # 🔹 Налаштування бота
