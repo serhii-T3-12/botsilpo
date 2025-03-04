@@ -10,13 +10,19 @@ import asyncio
 import aiosqlite
 
 
+from aiogram import Bot, Dispatcher
+
 # 🔹 Налаштування бота
 TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
 ADMIN_ID = 1299582357  # Твій Telegram ID
 AUTHORIZED_USERS = {ADMIN_ID}  # Список авторизованих користувачів
 
+# Створення бота
 bot = Bot(token=TOKEN, parse_mode="HTML")
-dp = Dispatcher()
+
+# Створення диспетчера
+dp = Dispatcher()  # Токен тут не потрібен
+
 
 # 🔹 Логування
 logging.basicConfig(level=logging.INFO)
