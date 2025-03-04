@@ -11,7 +11,7 @@ import aiosqlite
 
 
 # 🔹 Налаштування бота
-TOKEN = "-"
+TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
 ADMIN_ID = 1299582357  # Твій Telegram ID
 AUTHORIZED_USERS = {ADMIN_ID}  # Список авторизованих користувачів
 
