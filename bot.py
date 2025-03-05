@@ -272,16 +272,11 @@ async def add_product(message: Message):
                              "Щоб додати кілька товарів, введіть кожен з нового рядка.")
 
 
-# Створюємо стан для підтвердження видалення
-class ClearAllState(StatesGroup):
-    waiting_for_confirmation = State()
-
-
-CLEAR_ALL_PASSWORD = "05012025"  # Пароль для підтвердження видалення всіх товарів
-
 class ClearAllState(StatesGroup):
     waiting_for_password = State()
-    waiting_for_final_confirmation = State()
+    waiting_for_confirmation = State()
+
+CLEAR_ALL_PASSWORD = "05012025"
 
 @dp.message(Command("clear_all"))
 async def clear_all_products(message: Message, state: FSMContext):
@@ -296,12 +291,12 @@ async def clear_all_products(message: Message, state: FSMContext):
 async def confirm_password(msg: Message, state: FSMContext):
     if msg.text == CLEAR_ALL_PASSWORD:
         await msg.answer("🔴 Ви точно хочете видалити всі товари? Відповідайте 'ТАК' для підтвердження або 'НІ' для скасування.")
-        await state.set_state(ClearAllState.waiting_for_final_confirmation)
+        await state.set_state(ClearAllState.waiting_for_confirmation)
     else:
         await msg.answer("❌ Невірний пароль. Операція скасована.")
         await state.clear()
 
-@dp.message(ClearAllState.waiting_for_final_confirmation)
+@dp.message(ClearAllState.waiting_for_confirmation)
 async def final_confirmation(msg: Message, state: FSMContext):
     if msg.text.strip().lower() == "так":
         await execute_query("DELETE FROM products")
@@ -311,19 +306,6 @@ async def final_confirmation(msg: Message, state: FSMContext):
         await msg.answer("✅ Видалення скасовано.")
     
     await state.clear()
-
-
-
-@dp.message(ClearAllState.waiting_for_confirmation)
-async def confirm_clear(msg: Message, state: FSMContext):
-    if msg.text.lower() == "так":
-        await execute_query("DELETE FROM products")
-        await msg.answer("🗑 Всі товари видалено!")
-    else:
-        await msg.answer("❌ Операція скасована.")
-
-    await state.clear()  # Скидаємо стан
-
 
 # 📌 /search
 @dp.message(Command("search"))
