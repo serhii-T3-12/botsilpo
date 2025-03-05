@@ -401,7 +401,7 @@ async def edit_product(message: Message):
 async def export_products_to_excel():
     try:
         products = await execute_query("SELECT * FROM products", fetchall=True)
-        columns = ["id", "name", "category", "price", "stock"]  # Замініть на актуальні назви колонок
+        columns = ["id", "name", "article", "category"]  # Замініть на актуальні назви колонок
 
         df = pd.DataFrame(products, columns=columns)
         file_path = "products_report.xlsx"
@@ -412,12 +412,12 @@ async def export_products_to_excel():
         logging.error(f"❌ Помилка при експорті товарів: {e}")
         return None
 
-# Функція для надсилання щоденного звіту
+# 🔹 Функція для надсилання щоденного звіту
 async def send_daily_report():
     try:
         result = await execute_query("SELECT COUNT(*) FROM products", fetchone=True)
         count = result[0] if result else 0
-        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         report_message = f"📊 <b>Щоденний звіт</b>\n🕒 Час: {now}\n📦 Кількість товарів: {count}"
 
         file_path = await export_products_to_excel()
@@ -431,22 +431,24 @@ async def send_daily_report():
     except Exception as e:
         logging.error(f"❌ Помилка при надсиланні щоденного звіту: {e}")
 
-# Функція для запуску звітів у заданий час
+# 🔹 Функція для автоматичного запуску звітів у певний час
 async def schedule_reports():
     while True:
-        now = datetime.datetime.now()
+        now = datetime.now()
         if now.hour in [8, 23] and now.minute == 0:
+            logging.info(f"📢 Надсилаємо звіт о {now.strftime('%H:%M')}")
             await send_daily_report()
-        await asyncio.sleep(60)  # Перевіряємо кожну хвилину
+        await asyncio.sleep(60)  # Перевірка кожну хвилину
 
-# 📌 Запуск бота
+# 🔹 Головна функція запуску бота
 async def main():
-    print("✅ Бот запущено!")
-    await init_db()
+    logging.info("✅ Бот запущено!")
     products = await execute_query("SELECT COUNT(*) FROM products", fetchone=True)
-    print(f"📦 Товарів у базі: {products[0] if products else 0}")
-    asyncio.create_task(schedule_reports())  # Запускаємо фоновий процес
+    logging.info(f"📦 Товарів у базі: {products[0] if products else 0}")
+
+    asyncio.create_task(schedule_reports())  # Запускаємо перевірку часу для звітів
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    asyncio.run(main())  # Коректний виклик основної функції
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(main())
