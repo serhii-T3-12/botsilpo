@@ -397,20 +397,7 @@ async def edit_product(message: Message):
         await message.answer("⚠️ Формат: /edit Назва - Новий артикул - Нова категорія")
 
 
-# Функція для експорту товарів у Excel
-async def export_products_to_excel():
-    try:
-        products = await execute_query("SELECT * FROM products", fetchall=True)
-        columns = ["id", "name", "article", "category"]  # Замініть на актуальні назви колонок
-
-        df = pd.DataFrame(products, columns=columns)
-        file_path = "products_report.xlsx"
-        df.to_excel(file_path, index=False)
-
-        return file_path
-    except Exception as e:
-        logging.error(f"❌ Помилка при експорті товарів: {e}")
-        return None
+last_sent = None  # Глобальна змінна для збереження часу останнього звіту
 
 # 🔹 Функція для надсилання щоденного звіту
 async def send_daily_report():
@@ -420,25 +407,25 @@ async def send_daily_report():
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         report_message = f"📊 <b>Щоденний звіт</b>\n🕒 Час: {now}\n📦 Кількість товарів: {count}"
 
-        file_path = await export_products_to_excel()
-        if file_path:
-            file = FSInputFile(file_path)
-            await bot.send_document(ADMIN_ID, file, caption=report_message)
-        else:
-            await bot.send_message(ADMIN_ID, report_message)
-
+        await bot.send_message(ADMIN_ID, report_message)
         logging.info("✅ Щоденний звіт успішно відправлено.")
     except Exception as e:
         logging.error(f"❌ Помилка при надсиланні щоденного звіту: {e}")
 
 # 🔹 Функція для автоматичного запуску звітів у певний час
 async def schedule_reports():
+    global last_sent  # Використовуємо глобальну змінну
     while True:
         now = datetime.now()
-        if now.hour in [8, 23] and now.minute == 0:
-            logging.info(f"📢 Надсилаємо звіт о {now.strftime('%H:%M')}")
-            await send_daily_report()
-        await asyncio.sleep(60)  # Перевірка кожну хвилину
+        current_time = now.strftime("%Y-%m-%d %H:%M")  # Формат часу: YYYY-MM-DD HH:MM
+
+        if now.hour in [8, 23] and now.minute == 0:  # Час запуску
+            if last_sent != current_time:  # Перевіряємо, чи звіт вже відправлявся в цей момент
+                logging.info(f"📢 Надсилаємо звіт о {now.strftime('%H:%M')}")
+                await send_daily_report()
+                last_sent = current_time  # Оновлюємо час останнього відправлення
+
+        await asyncio.sleep(60)  # Перевіряємо кожну хвилину
 
 # 🔹 Головна функція запуску бота
 async def main():
