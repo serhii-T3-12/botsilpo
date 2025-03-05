@@ -2,6 +2,7 @@ import sqlite3
 import logging
 import os
 import csv
+import datetime
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram import Bot, Dispatcher, types
@@ -11,7 +12,6 @@ from aiogram.utils.markdown import hbold
 import asyncio
 import aiosqlite
 
-from aiogram import Bot, Dispatcher
 
 # 🔹 Налаштування бота
 TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
@@ -109,21 +109,6 @@ async def count_products(message: Message):
     result = await execute_query("SELECT COUNT(*) FROM products", fetchone=True)
     count = result[0] if result else 0
     await message.answer(f"📦 У базі збережено {count} товарів.")
-
-# 📌 /list
-@dp.message(Command("list"))
-async def list_products(message: Message):
-    products = await execute_query("SELECT name, article, category FROM products", fetchall=True)
-
-    if not products:
-        await message.answer("📭 У базі немає товарів!")
-        return
-
-    response = "📋 <b>Список товарів:</b>\n"
-    for name, article, category in products:
-        response += f"✅ {hbold(name)} (🆔 {hbold(article)}, 📂 {hbold(category)})\n"
-
-    await message.answer(response)
 
 
 # 📌 /search_article
@@ -292,15 +277,41 @@ class ClearAllState(StatesGroup):
     waiting_for_confirmation = State()
 
 
-# 📌 /clear_all
+CLEAR_ALL_PASSWORD = "05012025"  # Пароль для підтвердження видалення всіх товарів
+
+class ClearAllState(StatesGroup):
+    waiting_for_password = State()
+    waiting_for_final_confirmation = State()
+
 @dp.message(Command("clear_all"))
 async def clear_all_products(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
         await message.answer("❌ У вас немає прав!")
         return
 
-    await message.answer("⚠️ Ви впевнені, що хочете видалити всі товари? Відповідайте 'ТАК' або 'НІ'.")
-    await state.set_state(ClearAllState.waiting_for_confirmation)
+    await message.answer("⚠️ Введіть пароль для підтвердження видалення всіх товарів.")
+    await state.set_state(ClearAllState.waiting_for_password)
+
+@dp.message(ClearAllState.waiting_for_password)
+async def confirm_password(msg: Message, state: FSMContext):
+    if msg.text == CLEAR_ALL_PASSWORD:
+        await msg.answer("🔴 Ви точно хочете видалити всі товари? Відповідайте 'ТАК' для підтвердження або 'НІ' для скасування.")
+        await state.set_state(ClearAllState.waiting_for_final_confirmation)
+    else:
+        await msg.answer("❌ Невірний пароль. Операція скасована.")
+        await state.clear()
+
+@dp.message(ClearAllState.waiting_for_final_confirmation)
+async def final_confirmation(msg: Message, state: FSMContext):
+    if msg.text.strip().lower() == "так":
+        await execute_query("DELETE FROM products")
+        await execute_query("VACUUM")  # Очищення бази після видалення
+        await msg.answer("🗑 Всі товари видалено, база оптимізована!")
+    else:
+        await msg.answer("✅ Видалення скасовано.")
+    
+    await state.clear()
+
 
 
 @dp.message(ClearAllState.waiting_for_confirmation)
@@ -352,7 +363,7 @@ async def list_categories(message: Message):
     await message.answer(response)
 
 
-# 📌 /delete
+# 📌 /delete (оновлена команда з оптимізацією бази даних)
 @dp.message(Command("delete"))
 async def delete_product(message: Message):
     if not is_authorized(message.from_user.id):
@@ -361,38 +372,91 @@ async def delete_product(message: Message):
 
     try:
         name = message.text.split(" ", 1)[1].strip()
-        await execute_query("DELETE FROM products WHERE name = ?", (name,))
+        result = await execute_query("SELECT id FROM products WHERE name = ?", (name,), fetchone=True)
         
-        await message.answer(f"🗑 Товар '{hbold(name)}' видалено!")
+        if not result:
+            await message.answer(f"⚠️ Товар '{hbold(name)}' не знайдено!")
+            return
+
+        await execute_query("DELETE FROM products WHERE name = ?", (name,))
+        await execute_query("VACUUM")  # Оптимізація після видалення
+        await message.answer(f"🗑 Товар '{hbold(name)}' видалено, база оптимізована!")
+    
     except IndexError:
         await message.answer("⚠️ Формат: /delete Назва")
 
-# 📌 /edit
+
+# Команда /edit - редагування товару
 @dp.message(Command("edit"))
 async def edit_product(message: Message):
     try:
         text = message.text.split(" ", 1)[1].strip()
-        name, new_article = text.split(" - ")
+        name, new_article, new_category = text.split(" - ")
 
-        await execute_query("UPDATE products SET article = ? WHERE name = ?", (new_article.strip(), name.strip()))
-       
+        existing = await execute_query("SELECT * FROM products WHERE name = ?", (name,), fetchone=True)
+        if not existing:
+            await message.answer(f"⚠️ Товар '{name}' не знайдено!")
+            return
 
-        await message.answer(f"✏️ Товар '{hbold(name)}' оновлено!\nНовий артикул: 🆔 {hbold(new_article.strip())}")
+        await execute_query(
+            "UPDATE products SET article = ?, category = ? WHERE name = ?",
+            (new_article.strip(), new_category.strip(), name.strip())
+        )
 
-    except IndexError:
-        await message.answer("⚠️ Формат: /edit Назва - Новий артикул")
+        await message.answer(
+            f"✏️ Товар '{hbold(name)}' оновлено!\n"
+            f"Новий артикул: 🆔 {hbold(new_article.strip())}\n"
+            f"Нова категорія: 📂 {hbold(new_category.strip())}"
+        )
+    
+    except ValueError:
+        await message.answer("⚠️ Формат: /edit Назва - Новий артикул - Нова категорія")
+
+
+async def send_daily_report():
+    try:
+        result = await execute_query("SELECT COUNT(*) FROM products", fetchone=True)
+        count = result[0] if result else 0
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        report_message = f"📊 <b>Щоденний звіт</b>\n🕒 Час: {now}\n📦 Кількість товарів: {count}"
+        
+        await bot.send_message(ADMIN_ID, report_message)
+        logging.info("✅ Щоденний звіт успішно відправлено.")
+    
+    except Exception as e:
+        logging.error(f"❌ Помилка при надсиланні щоденного звіту: {e}")
+
+
+async def schedule_daily_report():
+    while True:
+        try:
+            now = datetime.datetime.now()
+            target_time = now.replace(hour=23, minute=0, second=0, microsecond=0)
+
+            if now > target_time:
+                target_time += datetime.timedelta(days=1)
+
+            wait_time = (target_time - now).total_seconds()
+            logging.info(f"📅 Наступний звіт буде через {wait_time / 3600:.2f} годин.")
+
+            await asyncio.sleep(wait_time)
+            await send_daily_report()
+
+        except Exception as e:
+            logging.error(f"❌ Помилка у щоденному звіті: {e}")
+            await asyncio.sleep(60)  # Якщо сталася помилка, чекаємо хвилину перед повтором
+
+
 
 # 📌 Запуск бота
 async def main():
     print("✅ Бот запущено!")
-    await init_db()  # Ініціалізація бази перед стартом
-
-    # Отримуємо кількість товарів у базі
+    await init_db()
     products = await execute_query("SELECT COUNT(*) FROM products", fetchone=True)
     print(f"📦 Товарів у базі: {products[0] if products else 0}")
-
-    await dp.start_polling(bot)  # Запуск опитування оновлень бота
-
+    asyncio.create_task(schedule_daily_report())  # Запускаємо щоденний звіт
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main())  # Коректний виклик основної функції
+
