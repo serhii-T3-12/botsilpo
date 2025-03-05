@@ -240,12 +240,16 @@ async def add_product(message: Message):
 
         added_count = 0
         existing_count = 0
+        errors = []
 
         for product in products:
             try:
                 name, article, category = map(str.strip, product.split(" - "))
 
-                # 🔍 Перевіряємо, чи є такий товар у базі
+                if not name or not article.isdigit():  # Перевіряємо, що артикул - число
+                    errors.append(product)
+                    continue
+
                 existing_product = await execute_query(
                     "SELECT id FROM products WHERE name = ? OR article = ?",
                     (name, article), fetchone=True
@@ -255,22 +259,21 @@ async def add_product(message: Message):
                     existing_count += 1
                     continue  # Пропускаємо товар, якщо він уже є
 
-                # ✅ Додаємо товар у базу
                 await execute_query(
                     "INSERT INTO products (name, article, category) VALUES (?, ?, ?)",
                     (name, article, category)
                 )
-
                 added_count += 1
 
             except ValueError:
-                await message.answer(f"⚠️ Неправильний формат: {product}. Формат: Назва - Артикул - Категорія")
+                errors.append(product)
                 continue  # Пропускаємо помилковий запис
 
-        # 🔔 Відправляємо підсумкове повідомлення
         result_msg = f"✅ Успішно додано: {added_count} товар(ів).\n"
         if existing_count:
-            result_msg += f"⚠️ Пропущено (вже є в базі): {existing_count} товар(ів)."
+            result_msg += f"⚠️ Пропущено (вже є в базі): {existing_count} товар(ів).\n"
+        if errors:
+            result_msg += f"❌ Помилки у записах: {', '.join(errors)}."
 
         await message.answer(result_msg)
 
@@ -278,6 +281,22 @@ async def add_product(message: Message):
         await message.answer("⚠️ Формат: /add Назва - Артикул - Категорія\n"
                              "Щоб додати кілька товарів, введіть кожен з нового рядка.")
 
+# 📌 /clear_all
+@dp.message(Command("clear_all"))
+async def clear_all_products(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ У вас немає прав!")
+        return
+
+    await message.answer("⚠️ Ви впевнені, що хочете видалити всі товари? Відповідайте 'ТАК' або 'НІ'.")
+
+    @dp.message()
+    async def confirm_clear(msg: Message):
+        if msg.text.lower() == "так":
+            await execute_query("DELETE FROM products")
+            await msg.answer("🗑 Всі товари видалено!")
+        else:
+            await msg.answer("❌ Операція скасована.")
 
 
 
@@ -286,17 +305,36 @@ async def add_product(message: Message):
 async def search_product(message: Message):
     try:
         query = message.text.split(" ", 1)[1].strip()
-        results = await execute_query("SELECT name, article, category FROM products WHERE name LIKE ?", 
-                                      ('%' + query + '%',), fetchall=True)
+
+        results = await execute_query(
+            "SELECT name, article, category FROM products WHERE name LIKE ? OR article LIKE ?", 
+            ('%' + query + '%', '%' + query + '%'), fetchall=True
+        )
+
         if not results:
             await message.answer(f"⚠️ '{query}' не знайдено.")
             return
+
         response = "🔍 <b>Знайдено:</b>\n"
         for name, article, category in results:
             response += f"✅ {hbold(name)} (🆔 {hbold(article)}, 📂 {hbold(category)})\n"
+
         await message.answer(response)
+
     except IndexError:
-        await message.answer("⚠️ Введіть назву: /search Назва")
+        await message.answer("⚠️ Введіть назву або артикул: /search <запит>")
+
+# 📌 /categories
+ @dp.message(Command("categories"))
+async def list_categories(message: Message):
+    categories = await execute_query("SELECT DISTINCT category FROM products", fetchall=True)
+
+    if not categories:
+        await message.answer("📭 Категорії ще не додані!")
+        return
+
+    response = "📂 <b>Список категорій:</b>\n" + "\n".join(f"✅ {hbold(cat[0])}" for cat in categories)
+    await message.answer(response)
 
 
 # 📌 /delete
@@ -332,8 +370,14 @@ async def edit_product(message: Message):
 # 📌 Запуск бота
 async def main():
     print("✅ Бот запущено!")
-    await init_db()  # Ініціалізація бази перед стартом бота (важливо!)
-    await dp.start_polling(bot)
+    await init_db()  # Ініціалізація бази перед стартом
+
+    # Отримуємо кількість товарів у базі
+    products = await execute_query("SELECT COUNT(*) FROM products", fetchone=True)
+    print(f"📦 Товарів у базі: {products[0] if products else 0}")
+
+    await dp.start_polling(bot)  # Запуск опитування оновлень бота
+
 
 if __name__ == "__main__":
     asyncio.run(main())
