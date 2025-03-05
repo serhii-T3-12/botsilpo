@@ -2,6 +2,8 @@ import sqlite3
 import logging
 import os
 import csv
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import Message
 from aiogram.filters import Command
@@ -281,23 +283,32 @@ async def add_product(message: Message):
         await message.answer("⚠️ Формат: /add Назва - Артикул - Категорія\n"
                              "Щоб додати кілька товарів, введіть кожен з нового рядка.")
 
+
+# Створюємо стан для підтвердження видалення
+class ClearAllState(StatesGroup):
+    waiting_for_confirmation = State()
+
+
 # 📌 /clear_all
 @dp.message(Command("clear_all"))
-async def clear_all_products(message: Message):
+async def clear_all_products(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
         await message.answer("❌ У вас немає прав!")
         return
 
     await message.answer("⚠️ Ви впевнені, що хочете видалити всі товари? Відповідайте 'ТАК' або 'НІ'.")
+    await state.set_state(ClearAllState.waiting_for_confirmation)
 
-    @dp.message()
-    async def confirm_clear(msg: Message):
-        if msg.text.lower() == "так":
-            await execute_query("DELETE FROM products")
-            await msg.answer("🗑 Всі товари видалено!")
-        else:
-            await msg.answer("❌ Операція скасована.")
 
+@dp.message(ClearAllState.waiting_for_confirmation)
+async def confirm_clear(msg: Message, state: FSMContext):
+    if msg.text.lower() == "так":
+        await execute_query("DELETE FROM products")
+        await msg.answer("🗑 Всі товари видалено!")
+    else:
+        await msg.answer("❌ Операція скасована.")
+
+    await state.clear()  # Скидаємо стан
 
 
 # 📌 /search
@@ -307,7 +318,7 @@ async def search_product(message: Message):
         query = message.text.split(" ", 1)[1].strip()
 
         results = await execute_query(
-            "SELECT name, article, category FROM products WHERE name LIKE ? OR article LIKE ?", 
+            "SELECT name, article, category FROM products WHERE name LIKE ? OR article LIKE ?",
             ('%' + query + '%', '%' + query + '%'), fetchall=True
         )
 
@@ -323,6 +334,7 @@ async def search_product(message: Message):
 
     except IndexError:
         await message.answer("⚠️ Введіть назву або артикул: /search <запит>")
+
 
 # 📌 /categories
  @dp.message(Command("categories"))
