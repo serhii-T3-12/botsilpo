@@ -13,7 +13,6 @@ import asyncio
 import aiosqlite
 import pandas as pd
 from aiogram.types import FSInputFile
-import aiocron
 
 # 🔹 Налаштування бота
 TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
