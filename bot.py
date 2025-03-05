@@ -228,7 +228,6 @@ async def import_products(message: Message):
     await message.answer(f"✅ Імпортовано {added} товарів")
 
 
-
 # 📌 /add
 @dp.message(Command("add"))
 async def add_product(message: Message):
