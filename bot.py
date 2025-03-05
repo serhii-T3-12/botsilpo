@@ -78,13 +78,14 @@ async def notify_admin(action, product_name, article, category=""):
 @dp.message(Command("start"))
 async def start_command(message: Message):
     await message.answer("👋 Привіт! Ось команди:\n"
-                         "/search - Пошук товару\n"
-                         "/search_article - Пошук за артикулом\n"
-                         "/count - Кількість товарів\n"
-                         "\n🔐 <b>Авторизовані користувачі:</b>\n"
-                         "/add, /list, /delete, /edit, /categories\n"
-                         "/export, /import, /export_category, /clear_all\n"
-                         "\n/login <пароль> – авторизація\n/logout – вийти")
+                     "/search - Пошук товару\n"
+                     "/search_article - Пошук за артикулом\n"
+                     "/count - Кількість товарів\n"
+                     "\n🔐 <b>Авторизовані користувачі:</b>\n"
+                     "/add, /list, /delete, /edit, /categories\n"
+                     "/export, /import, /export_category, /clear_all\n"
+                     "\n/login пароль – авторизація\n/logout – вийти",
+                     parse_mode="HTML")
 
 # 📌 /login - Авторизація
 @dp.message(Command("login"))
