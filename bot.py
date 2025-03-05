@@ -337,8 +337,8 @@ async def search_product(message: Message):
 
 
 # 📌 /categories
- @dp.message(Command("categories"))
- async def list_categories(message: Message):
+@dp.message(Command("categories"))
+async def list_categories(message: Message):
     categories = await execute_query("SELECT DISTINCT category FROM products", fetchall=True)
 
     if not categories:
