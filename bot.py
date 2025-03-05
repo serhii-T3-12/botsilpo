@@ -11,7 +11,8 @@ from aiogram.filters import Command
 from aiogram.utils.markdown import hbold
 import asyncio
 import aiosqlite
-
+import pandas as pd
+from aiogram.types import FSInputFile
 
 # 🔹 Налаштування бота
 TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
@@ -396,38 +397,38 @@ async def edit_product(message: Message):
         await message.answer("⚠️ Формат: /edit Назва - Новий артикул - Нова категорія")
 
 
+async def export_products_to_excel():
+    try:
+        products = await execute_query("SELECT * FROM products", fetchall=True)
+        columns = ["id", "name", "category", "price", "stock"]  # Замініть на актуальні назви колонок
+
+        df = pd.DataFrame(products, columns=columns)
+        file_path = "products_report.xlsx"
+        df.to_excel(file_path, index=False)
+
+        return file_path
+    except Exception as e:
+        logging.error(f"❌ Помилка при експорті товарів: {e}")
+        return None
+
 async def send_daily_report():
     try:
         result = await execute_query("SELECT COUNT(*) FROM products", fetchone=True)
         count = result[0] if result else 0
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         report_message = f"📊 <b>Щоденний звіт</b>\n🕒 Час: {now}\n📦 Кількість товарів: {count}"
-        
-        await bot.send_message(ADMIN_ID, report_message)
+
+        file_path = await export_products_to_excel()
+        if file_path:
+            file = FSInputFile(file_path)
+            await bot.send_document(ADMIN_ID, file, caption=report_message)
+        else:
+            await bot.send_message(ADMIN_ID, report_message)
+
         logging.info("✅ Щоденний звіт успішно відправлено.")
     
     except Exception as e:
         logging.error(f"❌ Помилка при надсиланні щоденного звіту: {e}")
-
-
-async def schedule_daily_report():
-    while True:
-        try:
-            now = datetime.datetime.now()
-            target_time = now.replace(hour=23, minute=0, second=0, microsecond=0)
-
-            if now > target_time:
-                target_time += datetime.timedelta(days=1)
-
-            wait_time = (target_time - now).total_seconds()
-            logging.info(f"📅 Наступний звіт буде через {wait_time / 3600:.2f} годин.")
-
-            await asyncio.sleep(wait_time)
-            await send_daily_report()
-
-        except Exception as e:
-            logging.error(f"❌ Помилка у щоденному звіті: {e}")
-            await asyncio.sleep(60)  # Якщо сталася помилка, чекаємо хвилину перед повтором
 
 
 
