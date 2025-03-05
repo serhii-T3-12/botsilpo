@@ -2,7 +2,6 @@ import sqlite3
 import logging
 import os
 import csv
-from datetime import datetime
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram import Bot, Dispatcher, types
@@ -11,8 +10,8 @@ from aiogram.filters import Command
 from aiogram.utils.markdown import hbold
 import asyncio
 import aiosqlite
-import pandas as pd
-from aiogram.types import FSInputFile
+
+
 
 # 🔹 Налаштування бота
 TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
@@ -397,45 +396,17 @@ async def edit_product(message: Message):
         await message.answer("⚠️ Формат: /edit Назва - Новий артикул - Нова категорія")
 
 
-last_sent = None  # Глобальна змінна для збереження часу останнього звіту
-
-# 🔹 Функція для надсилання щоденного звіту
-async def send_daily_report():
-    try:
-        result = await execute_query("SELECT COUNT(*) FROM products", fetchone=True)
-        count = result[0] if result else 0
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        report_message = f"📊 <b>Щоденний звіт</b>\n🕒 Час: {now}\n📦 Кількість товарів: {count}"
-
-        await bot.send_message(ADMIN_ID, report_message)
-        logging.info("✅ Щоденний звіт успішно відправлено.")
-    except Exception as e:
-        logging.error(f"❌ Помилка при надсиланні щоденного звіту: {e}")
-
-# 🔹 Функція для автоматичного запуску звітів у певний час
-async def schedule_reports():
-    global last_sent  # Використовуємо глобальну змінну
-    while True:
-        now = datetime.now()
-        current_time = now.strftime("%Y-%m-%d %H:%M")  # Формат часу: YYYY-MM-DD HH:MM
-
-        if now.hour in [8, 23] and now.minute == 0:  # Час запуску
-            if last_sent != current_time:  # Перевіряємо, чи звіт вже відправлявся в цей момент
-                logging.info(f"📢 Надсилаємо звіт о {now.strftime('%H:%M')}")
-                await send_daily_report()
-                last_sent = current_time  # Оновлюємо час останнього відправлення
-
-        await asyncio.sleep(60)  # Перевіряємо кожну хвилину
-
-# 🔹 Головна функція запуску бота
+# 📌 Запуск бота
 async def main():
-    logging.info("✅ Бот запущено!")
-    products = await execute_query("SELECT COUNT(*) FROM products", fetchone=True)
-    logging.info(f"📦 Товарів у базі: {products[0] if products else 0}")
+    print("✅ Бот запущено!")
+    await init_db()  # Ініціалізація бази перед стартом
 
-    asyncio.create_task(schedule_reports())  # Запускаємо перевірку часу для звітів
-    await dp.start_polling(bot)
+    # Отримуємо кількість товарів у базі
+    products = await execute_query("SELECT COUNT(*) FROM products", fetchone=True)
+    print(f"📦 Товарів у базі: {products[0] if products else 0}")
+
+    await dp.start_polling(bot)  # Запуск опитування оновлень бота
+
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())
