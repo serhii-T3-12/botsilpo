@@ -2,7 +2,7 @@ import sqlite3
 import logging
 import os
 import csv
-import datetime
+from datetime import datetime
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram import Bot, Dispatcher, types
@@ -13,6 +13,7 @@ import asyncio
 import aiosqlite
 import pandas as pd
 from aiogram.types import FSInputFile
+import aiocron
 
 # 🔹 Налаштування бота
 TOKEN = "7861897815:AAFByfkNqSIWIauet7k0lyS80SgiuqWPDhw"
@@ -316,7 +317,7 @@ async def search_product(message: Message):
         query = message.text.split(" ", 1)[1].strip()
 
         results = await execute_query(
-            "SELECT name, article, category FROM products WHERE name LIKE ? OR article LIKE ?",
+            "SELECT name, article, category FROM products WHERE name LIKE ? OR article LIKE ? LIMIT 20",
             ('%' + query + '%', '%' + query + '%'), fetchall=True
         )
 
@@ -397,10 +398,11 @@ async def edit_product(message: Message):
         await message.answer("⚠️ Формат: /edit Назва - Новий артикул - Нова категорія")
 
 
+# Функція для експорту товарів у Excel
 async def export_products_to_excel():
     try:
-        products = await execute_query("SELECT * FROM products", fetchall=True)
-        columns = ["id", "name", "category", "price", "stock"]  # Замініть на актуальні назви колонок
+        products = await execute_query("SELECT id, name, article, category FROM products", fetchall=True)
+        columns = ["ID", "Назва", "Артикул", "Категорія"]  # Оновлені назви колонок
 
         df = pd.DataFrame(products, columns=columns)
         file_path = "products_report.xlsx"
@@ -411,6 +413,7 @@ async def export_products_to_excel():
         logging.error(f"❌ Помилка при експорті товарів: {e}")
         return None
 
+# Функція для надсилання щоденного звіту
 async def send_daily_report():
     try:
         result = await execute_query("SELECT COUNT(*) FROM products", fetchone=True)
@@ -426,21 +429,24 @@ async def send_daily_report():
             await bot.send_message(ADMIN_ID, report_message)
 
         logging.info("✅ Щоденний звіт успішно відправлено.")
-    
     except Exception as e:
         logging.error(f"❌ Помилка при надсиланні щоденного звіту: {e}")
 
+# Планувальник для щоденного запуску
+async def scheduler():
+    aioschedule.every().day.at("08:00").do(send_daily_report)
+    aioschedule.every().day.at("23:00").do(send_daily_report)
 
+    while True:
+        await aioschedule.run_pending()
+        await asyncio.sleep(60)  # Перевірка кожну хвилину
 
-# 📌 Запуск бота
+# Додати в `main()` запуск планувальника
 async def main():
     print("✅ Бот запущено!")
     await init_db()
-    products = await execute_query("SELECT COUNT(*) FROM products", fetchone=True)
-    print(f"📦 Товарів у базі: {products[0] if products else 0}")
-    asyncio.create_task(schedule_daily_report())  # Запускаємо щоденний звіт
+    asyncio.create_task(scheduler())  # Запуск планувальника
     await dp.start_polling(bot)
-
+    
 if __name__ == "__main__":
     asyncio.run(main())  # Коректний виклик основної функції
-
