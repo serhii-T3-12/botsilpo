@@ -93,11 +93,15 @@ async def login_command(message: Message):
         password = message.text.split(" ", 1)[1].strip()
         if password == "01032025":
             AUTHORIZED_USERS.add(message.from_user.id)
-            await message.answer("✅ Ви успішно авторизовані! Вам доступні адміністративні команди.")
+            await message.answer(
+                "✅ Ви успішно авторизовані! Вам доступні адміністративні команди.",
+                parse_mode="HTML"
+            )
         else:
-            await message.answer("❌ Невірний пароль! Спробуйте ще раз.")
+            await message.answer("❌ Невірний пароль! Спробуйте ще раз.", parse_mode="HTML")
     except IndexError:
-        await message.answer("⚠️ Використання: /login пароль")
+        await message.answer("⚠️ Використання: <code>/login пароль</code>", parse_mode="HTML")
+
 
 # 📌 /count
 @dp.message(Command("count"))
