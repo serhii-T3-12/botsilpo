@@ -400,8 +400,8 @@ async def edit_product(message: Message):
 # Функція для експорту товарів у Excel
 async def export_products_to_excel():
     try:
-        products = await execute_query("SELECT id, name, article, category FROM products", fetchall=True)
-        columns = ["ID", "Назва", "Артикул", "Категорія"]  # Оновлені назви колонок
+        products = await execute_query("SELECT * FROM products", fetchall=True)
+        columns = ["id", "name", "category", "price", "stock"]  # Замініть на актуальні назви колонок
 
         df = pd.DataFrame(products, columns=columns)
         file_path = "products_report.xlsx"
@@ -431,21 +431,22 @@ async def send_daily_report():
     except Exception as e:
         logging.error(f"❌ Помилка при надсиланні щоденного звіту: {e}")
 
-# Планувальник для щоденного запуску
-async def scheduler():
-    aioschedule.every().day.at("08:00").do(send_daily_report)
-    aioschedule.every().day.at("23:00").do(send_daily_report)
-
+# Функція для запуску звітів у заданий час
+async def schedule_reports():
     while True:
-        await aioschedule.run_pending()
-        await asyncio.sleep(60)  # Перевірка кожну хвилину
+        now = datetime.datetime.now()
+        if now.hour in [8, 23] and now.minute == 0:
+            await send_daily_report()
+        await asyncio.sleep(60)  # Перевіряємо кожну хвилину
 
-# Додати в `main()` запуск планувальника
+# 📌 Запуск бота
 async def main():
     print("✅ Бот запущено!")
     await init_db()
-    asyncio.create_task(scheduler())  # Запуск планувальника
+    products = await execute_query("SELECT COUNT(*) FROM products", fetchone=True)
+    print(f"📦 Товарів у базі: {products[0] if products else 0}")
+    asyncio.create_task(schedule_reports())  # Запускаємо фоновий процес
     await dp.start_polling(bot)
-    
+
 if __name__ == "__main__":
     asyncio.run(main())  # Коректний виклик основної функції
